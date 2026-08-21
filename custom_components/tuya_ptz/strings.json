@@ -1,0 +1,16 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Tuya PTZ",
+        "description": "Select a Tuya camera that exposes PTZ controls.",
+        "data": {
+          "device_id": "Camera"
+        }
+      }
+    },
+    "abort": {
+      "no_ptz_cameras": "No Tuya PTZ cameras were found. Make sure the Tuya integration is configured and the camera exposes ptz_control and ptz_stop."
+    }
+  }
+}
