@@ -4,6 +4,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
+from .services import async_setup_services
 
 PLATFORMS = ["button"]
 
@@ -11,6 +12,7 @@ PLATFORMS = ["button"]
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up Tuya PTZ."""
     hass.data.setdefault(DOMAIN, {})
+    async_setup_services(hass)
     return True
 
 
