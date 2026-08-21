@@ -119,22 +119,12 @@ async def async_handle_diagnose_stream(call: ServiceCall) -> None:
     try:
         tuya_device_id = _target_device_id(call.hass, call)
         if not tuya_device_id:
-            message = (
-                "Impossible de déterminer la caméra cible. "
-                "Avec plusieurs caméras PTZ, renseigne camera_entity."
-            )
-            _notify(call.hass, message)
-            _LOGGER.error(message)
+            _notify(call.hass, "Impossible de déterminer la caméra cible. Avec plusieurs caméras PTZ, renseigne camera_entity.")
             return
 
         manager, device = _get_tuya_manager_and_device(call.hass, tuya_device_id)
         if manager is None or device is None:
-            message = (
-                f"L'appareil Tuya {tuya_device_id} n'est pas disponible dans "
-                "l'intégration Tuya chargée."
-            )
-            _notify(call.hass, message)
-            _LOGGER.error(message)
+            _notify(call.hass, f"L'appareil Tuya {tuya_device_id} n'est pas disponible dans l'intégration Tuya chargée.")
             return
 
         try:
@@ -142,52 +132,39 @@ async def async_handle_diagnose_stream(call: ServiceCall) -> None:
                 manager.get_device_stream_allocate, device.id, "rtsp"
             )
         except Exception as err:  # noqa: BLE001
-            _LOGGER.exception(
-                "Tuya PTZ stream diagnostic failed for %s (%s)",
-                device.product_name,
-                device.id,
-            )
+            _LOGGER.exception("Tuya PTZ stream diagnostic failed for %s (%s)", device.product_name, device.id)
             _notify(
                 call.hass,
-                f"Tuya n'a pas pu allouer le flux RTSP pour « {device.product_name} ».\n\n"
-                f"Erreur : {type(err).__name__}: {err}",
+                f"Tuya n'a pas pu allouer le flux RTSP pour « {device.product_name} ».\n\nErreur : {type(err).__name__}: {err}",
             )
             return
 
         if not stream_url:
-            message = f"Tuya n'a retourné aucune URL RTSP pour « {device.product_name} »."
-            _notify(call.hass, message)
-            _LOGGER.warning(message)
+            _notify(call.hass, f"Tuya n'a retourné aucune URL RTSP pour « {device.product_name} ».")
             return
 
         parsed = urlsplit(stream_url)
         safe_url = parsed._replace(query="", fragment="").geturl()
-        message = (
+        _notify(
+            call.hass,
             f"Caméra : {device.product_name}\n"
             f"Protocole : {parsed.scheme}\n"
             f"Serveur : {parsed.hostname}\n"
             f"Port : {parsed.port}\n"
             f"Chemin : {parsed.path}\n\n"
             "Les paramètres d'authentification de l'URL ont été masqués.\n"
-            f"Source : {safe_url}"
+            f"Source : {safe_url}",
         )
-        _notify(call.hass, message)
         _LOGGER.warning(
             "Tuya PTZ stream diagnostic for %s (%s): RTSP source=%s | scheme=%s host=%s port=%s path=%s | query parameters redacted",
-            device.product_name,
-            device.id,
-            safe_url,
-            parsed.scheme,
-            parsed.hostname,
-            parsed.port,
-            parsed.path,
+            device.product_name, device.id, safe_url, parsed.scheme, parsed.hostname, parsed.port, parsed.path,
         )
     except Exception as err:  # noqa: BLE001
         _LOGGER.exception("Unexpected Tuya PTZ stream diagnostic error")
-        _notify(
-            call.hass,
-            f"Erreur interne du diagnostic Tuya PTZ : {type(err).__name__}: {err}",
-        )
+        try:
+            _notify(call.hass, f"Erreur interne du diagnostic Tuya PTZ : {type(err).__name__}: {err}")
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Could not create diagnostic notification")
 
 
 def async_setup_services(hass: HomeAssistant) -> None:
@@ -195,9 +172,4 @@ def async_setup_services(hass: HomeAssistant) -> None:
     if hass.services.has_service(DOMAIN, "move"):
         return
     hass.services.async_register(DOMAIN, "move", async_handle_move, schema=MOVE_SCHEMA)
-    hass.services.async_register(
-        DOMAIN,
-        "diagnose_stream",
-        async_handle_diagnose_stream,
-        schema=DIAGNOSE_STREAM_SCHEMA,
-    )
+    hass.services.async_register(DOMAIN, "diagnose_stream", async_handle_diagnose_stream, schema=DIAGNOSE_STREAM_SCHEMA)
