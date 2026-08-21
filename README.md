@@ -14,6 +14,7 @@ Adds PTZ controls to Tuya cameras that expose the `ptz_control` and `ptz_stop` f
 - Up-left
 - Stop
 - Continuous movement for Advanced Camera Card
+- RTSP stream diagnostic using the same Tuya API as Home Assistant
 
 The integration reuses the existing Home Assistant Tuya connection. No Tuya credentials are requested again.
 
@@ -121,6 +122,36 @@ If your Advanced Camera Card version exposes diagonal PTZ actions, use the same 
 - `phase: stop` sends `ptz_stop` and stops the movement.
 - This makes the integration suitable for a joystick or press-and-hold PTZ control.
 - The camera does not expose a PTZ speed data point, so the camera's own PTZ speed is used.
+
+## Stream diagnostic
+
+Home Assistant's official Tuya camera integration requests an RTSP stream source from Tuya using `get_device_stream_allocate(device_id, "rtsp")`. The `tuya_ptz.diagnose_stream` service performs the same request and writes a **sanitized** result to the Home Assistant log. Query parameters such as `signInfo` are deliberately removed from the log so stream credentials are not exposed.
+
+This is useful when investigating video quality, stream errors, or whether Tuya is returning a usable main stream.
+
+### Run the diagnostic
+
+Go to **Developer Tools → Actions**, select:
+
+```text
+tuya_ptz.diagnose_stream
+```
+
+For a setup with multiple PTZ cameras, target the camera explicitly:
+
+```yaml
+camera_entity: camera.lsc_smart_camera_ptz_dualband_indoor
+```
+
+Then check **Settings → System → Logs** for a line beginning with:
+
+```text
+Tuya PTZ stream diagnostic
+```
+
+The log contains the RTSP scheme, host, port and path, but **never logs the signed query parameters**.
+
+If Tuya returns no URL or an error, the diagnostic records that result. The diagnostic does not change the camera configuration and does not send any PTZ command.
 
 ## Notes
 
