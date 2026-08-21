@@ -2,19 +2,18 @@
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity import EntityCategory
 
 from .const import CONF_CAMERA_NAME, CONF_DEVICE_ID, DOMAIN
 
 DIRECTIONS = {
-    "Up": "0",
-    "Up Right": "1",
-    "Right": "2",
-    "Down Right": "3",
-    "Down": "4",
-    "Down Left": "5",
-    "Left": "6",
-    "Up Left": "7",
+    "Up": ("0", "mdi:arrow-up"),
+    "Up Right": ("1", "mdi:arrow-top-right"),
+    "Right": ("2", "mdi:arrow-right"),
+    "Down Right": ("3", "mdi:arrow-bottom-right"),
+    "Down": ("4", "mdi:arrow-down"),
+    "Down Left": ("5", "mdi:arrow-bottom-left"),
+    "Left": ("6", "mdi:arrow-left"),
+    "Up Left": ("7", "mdi:arrow-top-left"),
 }
 
 
@@ -32,8 +31,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
             camera_name,
             action_name,
             direction,
+            icon,
         )
-        for action_name, direction in DIRECTIONS.items()
+        for action_name, (direction, icon) in DIRECTIONS.items()
     ]
     entities.append(
         TuyaPTZButton(
@@ -43,6 +43,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             camera_name,
             "Stop",
             None,
+            "mdi:stop",
         )
     )
     async_add_entities(entities)
@@ -52,7 +53,6 @@ class TuyaPTZButton(ButtonEntity):
     """A single Tuya PTZ command button."""
 
     _attr_has_entity_name = True
-    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
         self,
@@ -62,6 +62,7 @@ class TuyaPTZButton(ButtonEntity):
         camera_name,
         action_name,
         direction,
+        icon,
     ):
         self.hass = hass
         self._device_id = device_id
@@ -70,7 +71,7 @@ class TuyaPTZButton(ButtonEntity):
         self._attr_unique_id = (
             f"{entry_id}_ptz_{action_name.lower().replace(' ', '_')}"
         )
-        self._attr_icon = "mdi:arrow-all"
+        self._attr_icon = icon
         self._attr_device_info = DeviceInfo(
             identifiers={("tuya", device_id)},
             name=camera_name,
