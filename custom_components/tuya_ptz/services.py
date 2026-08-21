@@ -7,6 +7,7 @@ import voluptuous as vol
 
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -107,34 +108,50 @@ async def async_handle_diagnose_stream(call: ServiceCall) -> None:
     """Ask Tuya for the same RTSP stream source used by Home Assistant."""
     tuya_device_id = _target_device_id(call.hass, call)
     if not tuya_device_id:
-        raise ValueError(
-            "tuya_ptz.diagnose_stream needs a target camera when multiple PTZ cameras are configured"
+        raise HomeAssistantError(
+            "A target camera is required when multiple Tuya PTZ cameras are configured."
         )
     manager, device = _get_tuya_manager_and_device(call.hass, tuya_device_id)
     if manager is None or device is None:
-        raise ValueError(f"Tuya device {tuya_device_id} is not available")
+        raise HomeAssistantError(
+            f"Tuya device {tuya_device_id} is not available in the loaded Tuya integration."
+        )
+
     try:
         stream_url = await call.hass.async_add_executor_job(
             manager.get_device_stream_allocate, device.id, "rtsp"
         )
     except Exception as err:  # noqa: BLE001
-        _LOGGER.error(
-            "Tuya PTZ stream diagnostic failed for %s (%s): %s",
-            device.product_name, device.id, err,
+        _LOGGER.exception(
+            "Tuya PTZ stream diagnostic failed for %s (%s)",
+            device.product_name,
+            device.id,
         )
-        raise
+        raise HomeAssistantError(
+            f"Tuya could not allocate an RTSP stream: {type(err).__name__}: {err}"
+        ) from err
+
     if not stream_url:
         _LOGGER.warning(
             "Tuya PTZ stream diagnostic: Tuya returned no RTSP URL for %s (%s)",
-            device.product_name, device.id,
+            device.product_name,
+            device.id,
         )
-        return
+        raise HomeAssistantError(
+            "Tuya returned no RTSP URL for this camera. Check the Tuya camera stream availability."
+        )
+
     parsed = urlsplit(stream_url)
     safe_url = parsed._replace(query="", fragment="").geturl()
     _LOGGER.warning(
         "Tuya PTZ stream diagnostic for %s (%s): RTSP source=%s | scheme=%s host=%s port=%s path=%s | query parameters redacted",
-        device.product_name, device.id, safe_url, parsed.scheme, parsed.hostname,
-        parsed.port, parsed.path,
+        device.product_name,
+        device.id,
+        safe_url,
+        parsed.scheme,
+        parsed.hostname,
+        parsed.port,
+        parsed.path,
     )
 
 
@@ -144,5 +161,8 @@ def async_setup_services(hass: HomeAssistant) -> None:
         return
     hass.services.async_register(DOMAIN, "move", async_handle_move, schema=MOVE_SCHEMA)
     hass.services.async_register(
-        DOMAIN, "diagnose_stream", async_handle_diagnose_stream, schema=DIAGNOSE_STREAM_SCHEMA
+        DOMAIN,
+        "diagnose_stream",
+        async_handle_diagnose_stream,
+        schema=DIAGNOSE_STREAM_SCHEMA,
     )
