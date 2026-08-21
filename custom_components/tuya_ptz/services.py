@@ -5,9 +5,9 @@ from urllib.parse import urlsplit
 
 import voluptuous as vol
 
+from homeassistant.components import persistent_notification
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -89,12 +89,11 @@ def _get_tuya_manager_and_device(hass: HomeAssistant, tuya_device_id: str):
 
 def _notify(hass: HomeAssistant, message: str) -> None:
     """Show diagnostic results without exposing credentials."""
-    hass.async_create_task(
-        hass.components.persistent_notification.async_create(
-            message,
-            title="Tuya PTZ – diagnostic flux",
-            notification_id="tuya_ptz_stream_diagnostic",
-        )
+    persistent_notification.async_create(
+        hass,
+        message,
+        title="Tuya PTZ – diagnostic flux",
+        notification_id="tuya_ptz_stream_diagnostic",
     )
 
 
@@ -117,73 +116,78 @@ async def async_handle_move(call: ServiceCall) -> None:
 
 async def async_handle_diagnose_stream(call: ServiceCall) -> None:
     """Ask Tuya for the same RTSP stream source used by Home Assistant."""
-    tuya_device_id = _target_device_id(call.hass, call)
-    if not tuya_device_id:
-        message = (
-            "Impossible de déterminer la caméra cible. "
-            "Avec plusieurs caméras PTZ, renseigne camera_entity."
-        )
-        _notify(call.hass, message)
-        _LOGGER.error(message)
-        return
-
-    manager, device = _get_tuya_manager_and_device(call.hass, tuya_device_id)
-    if manager is None or device is None:
-        message = (
-            f"L'appareil Tuya {tuya_device_id} n'est pas disponible dans "
-            "l'intégration Tuya chargée."
-        )
-        _notify(call.hass, message)
-        _LOGGER.error(message)
-        return
-
     try:
-        stream_url = await call.hass.async_add_executor_job(
-            manager.get_device_stream_allocate, device.id, "rtsp"
+        tuya_device_id = _target_device_id(call.hass, call)
+        if not tuya_device_id:
+            message = (
+                "Impossible de déterminer la caméra cible. "
+                "Avec plusieurs caméras PTZ, renseigne camera_entity."
+            )
+            _notify(call.hass, message)
+            _LOGGER.error(message)
+            return
+
+        manager, device = _get_tuya_manager_and_device(call.hass, tuya_device_id)
+        if manager is None or device is None:
+            message = (
+                f"L'appareil Tuya {tuya_device_id} n'est pas disponible dans "
+                "l'intégration Tuya chargée."
+            )
+            _notify(call.hass, message)
+            _LOGGER.error(message)
+            return
+
+        try:
+            stream_url = await call.hass.async_add_executor_job(
+                manager.get_device_stream_allocate, device.id, "rtsp"
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.exception(
+                "Tuya PTZ stream diagnostic failed for %s (%s)",
+                device.product_name,
+                device.id,
+            )
+            _notify(
+                call.hass,
+                f"Tuya n'a pas pu allouer le flux RTSP pour « {device.product_name} ».\n\n"
+                f"Erreur : {type(err).__name__}: {err}",
+            )
+            return
+
+        if not stream_url:
+            message = f"Tuya n'a retourné aucune URL RTSP pour « {device.product_name} »."
+            _notify(call.hass, message)
+            _LOGGER.warning(message)
+            return
+
+        parsed = urlsplit(stream_url)
+        safe_url = parsed._replace(query="", fragment="").geturl()
+        message = (
+            f"Caméra : {device.product_name}\n"
+            f"Protocole : {parsed.scheme}\n"
+            f"Serveur : {parsed.hostname}\n"
+            f"Port : {parsed.port}\n"
+            f"Chemin : {parsed.path}\n\n"
+            "Les paramètres d'authentification de l'URL ont été masqués.\n"
+            f"Source : {safe_url}"
         )
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.exception(
-            "Tuya PTZ stream diagnostic failed for %s (%s)",
+        _notify(call.hass, message)
+        _LOGGER.warning(
+            "Tuya PTZ stream diagnostic for %s (%s): RTSP source=%s | scheme=%s host=%s port=%s path=%s | query parameters redacted",
             device.product_name,
             device.id,
+            safe_url,
+            parsed.scheme,
+            parsed.hostname,
+            parsed.port,
+            parsed.path,
         )
-        message = (
-            f"Tuya n'a pas pu allouer le flux RTSP pour « {device.product_name} ».\n\n"
-            f"Erreur : {type(err).__name__}: {err}"
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.exception("Unexpected Tuya PTZ stream diagnostic error")
+        _notify(
+            call.hass,
+            f"Erreur interne du diagnostic Tuya PTZ : {type(err).__name__}: {err}",
         )
-        _notify(call.hass, message)
-        return
-
-    if not stream_url:
-        message = (
-            f"Tuya n'a retourné aucune URL RTSP pour « {device.product_name} »."
-        )
-        _notify(call.hass, message)
-        _LOGGER.warning(message)
-        return
-
-    parsed = urlsplit(stream_url)
-    safe_url = parsed._replace(query="", fragment="").geturl()
-    message = (
-        f"Caméra : {device.product_name}\n"
-        f"Protocole : {parsed.scheme}\n"
-        f"Serveur : {parsed.hostname}\n"
-        f"Port : {parsed.port}\n"
-        f"Chemin : {parsed.path}\n\n"
-        "Les paramètres d'authentification de l'URL ont été masqués.\n"
-        f"Source : {safe_url}"
-    )
-    _notify(call.hass, message)
-    _LOGGER.warning(
-        "Tuya PTZ stream diagnostic for %s (%s): RTSP source=%s | scheme=%s host=%s port=%s path=%s | query parameters redacted",
-        device.product_name,
-        device.id,
-        safe_url,
-        parsed.scheme,
-        parsed.hostname,
-        parsed.port,
-        parsed.path,
-    )
 
 
 def async_setup_services(hass: HomeAssistant) -> None:
