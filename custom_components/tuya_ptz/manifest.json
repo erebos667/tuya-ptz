@@ -1,0 +1,10 @@
+{
+  "domain": "tuya_ptz",
+  "name": "Tuya PTZ",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://github.com/erebos667/tuya-ptz",
+  "iot_class": "cloud_polling",
+  "requirements": [],
+  "version": "0.1.0"
+}
