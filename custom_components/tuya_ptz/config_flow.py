@@ -1,5 +1,7 @@
 """Config flow for Tuya PTZ."""
 
+from __future__ import annotations
+
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
@@ -14,22 +16,33 @@ class TuyaPTZConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input=None) -> FlowResult:
         """Select a Tuya camera exposing PTZ controls."""
-        errors = {}
-        devices = {}
+        devices: dict[str, str] = {}
 
-        for entry in self.hass.config_entries.async_loaded_entries("tuya"):
-            manager = entry.runtime_data.manager
-            for device in manager.device_map.values():
-                if "ptz_control" not in device.function or "ptz_stop" not in device.function:
+        for entry in self.hass.config_entries.async_entries("tuya"):
+            runtime_data = getattr(entry, "runtime_data", None)
+            manager = getattr(runtime_data, "manager", None)
+            if manager is None:
+                continue
+
+            device_map = getattr(manager, "device_map", {}) or {}
+            for device in device_map.values():
+                function = getattr(device, "function", {}) or {}
+                if not isinstance(function, dict):
                     continue
-                devices[device.id] = device.name or device.id
+                if "ptz_control" not in function or "ptz_stop" not in function:
+                    continue
+
+                device_id = getattr(device, "id", None)
+                if not device_id:
+                    continue
+                devices[device_id] = getattr(device, "name", None) or device_id
 
         if not devices:
             return self.async_abort(reason="no_ptz_cameras")
 
         if user_input:
             device_id = user_input[CONF_DEVICE_ID]
-            await self.async_set_unique_id(device_id)
+            await self.async_set_unique_id(f"{DOMAIN}_{device_id}")
             self._abort_if_unique_id_configured()
             return self.async_create_entry(
                 title=devices.get(device_id, device_id),
@@ -44,5 +57,4 @@ class TuyaPTZConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {vol.Required(CONF_DEVICE_ID): vol.In(devices)}
             ),
-            errors=errors,
         )
