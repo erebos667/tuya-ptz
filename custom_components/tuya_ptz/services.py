@@ -6,6 +6,7 @@ from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN
 
@@ -31,15 +32,14 @@ MOVE_SCHEMA = vol.Schema(
 
 def _tuya_device_id_from_entity(hass: HomeAssistant, entity_id: str) -> str | None:
     """Resolve a Tuya device ID from a Home Assistant entity."""
-    entity_entry = dr.async_get(hass).async_get_entity_id(entity_id)
-    if entity_entry is None:
+    entity_entry = er.async_get(hass).async_get(entity_id)
+    if entity_entry is None or entity_entry.device_id is None:
         return None
-    device_id = entity_entry.device_id
-    if not device_id:
-        return None
-    device_entry = dr.async_get(hass).async_get(device_id)
+
+    device_entry = dr.async_get(hass).async_get(entity_entry.device_id)
     if device_entry is None:
         return None
+
     for domain, identifier in device_entry.identifiers:
         if domain == "tuya":
             return identifier
