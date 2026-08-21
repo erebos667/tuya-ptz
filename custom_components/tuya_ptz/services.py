@@ -26,6 +26,9 @@ MOVE_SCHEMA = vol.Schema(
         vol.Required("direction"): vol.In(DIRECTIONS),
         vol.Required("phase"): vol.In(["start", "stop"]),
         vol.Optional(ATTR_ENTITY_ID): cv.entity_ids,
+        # Advanced Camera Card places this inside the service data when using
+        # the shorthand `service` + `data_*` PTZ configuration.
+        vol.Optional("camera_entity"): cv.entity_id,
     }
 )
 
@@ -56,11 +59,15 @@ def _default_device_id(hass: HomeAssistant) -> str | None:
 
 async def async_handle_move(call: ServiceCall) -> None:
     """Start or stop a continuous PTZ movement."""
-    entity_ids = call.data.get(ATTR_ENTITY_ID, [])
-    if entity_ids:
-        tuya_device_id = _tuya_device_id_from_entity(call.hass, entity_ids[0])
+    camera_entity = call.data.get("camera_entity")
+    if camera_entity:
+        tuya_device_id = _tuya_device_id_from_entity(call.hass, camera_entity)
     else:
-        tuya_device_id = _default_device_id(call.hass)
+        entity_ids = call.data.get(ATTR_ENTITY_ID, [])
+        if entity_ids:
+            tuya_device_id = _tuya_device_id_from_entity(call.hass, entity_ids[0])
+        else:
+            tuya_device_id = _default_device_id(call.hass)
 
     if not tuya_device_id:
         raise ValueError(
