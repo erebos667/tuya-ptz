@@ -1,21 +1,33 @@
 # Tuya PTZ for Home Assistant
 
-Adds PTZ controls for Tuya cameras that expose the `ptz_control` and `ptz_stop` data points.
+Adds PTZ controls to Tuya cameras that expose the `ptz_control` and `ptz_stop` functions.
+
+## Supported controls
+
+- Up
+- Up-right
+- Right
+- Down-right
+- Down
+- Down-left
+- Left
+- Up-left
+- Stop
+
+The integration reuses the existing Home Assistant Tuya connection. No Tuya credentials are requested again.
 
 ## Installation with HACS
 
-Add this repository as a custom repository in HACS, category **Integration**:
+1. Add this repository as a custom HACS repository.
+2. Choose **Integration**.
+3. Install **Tuya PTZ**.
+4. Restart Home Assistant.
+5. Go to **Settings → Devices & services → Add integration**.
+6. Choose **Tuya PTZ**.
+7. Select a Tuya camera exposing `ptz_control` and `ptz_stop`.
 
-`https://github.com/erebos667/tuya-ptz`
+The PTZ buttons are attached to the existing Tuya camera device.
 
-Then install **Tuya PTZ** and restart Home Assistant.
+## Notes
 
-## Supported devices
-
-The integration looks for Tuya devices exposing the following functions:
-
-- `ptz_control`: `0..7` for the eight directions
-- `ptz_stop`: boolean
-- `ptz_calibration`: boolean when available
-
-It uses the existing Tuya integration connection; no second Tuya login is required.
+PTZ commands are sent directly through the already configured Tuya integration. Depending on the camera firmware, a direction can continue moving until **Stop** is pressed.
