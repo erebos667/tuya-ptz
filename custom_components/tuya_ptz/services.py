@@ -8,7 +8,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
-from .const import DOMAIN
+from .const import CONF_DEVICE_ID, DOMAIN
 
 DIRECTIONS = {
     "up": "0",
@@ -46,15 +46,26 @@ def _tuya_device_id_from_entity(hass: HomeAssistant, entity_id: str) -> str | No
     return None
 
 
+def _default_device_id(hass: HomeAssistant) -> str | None:
+    """Use the configured PTZ camera when no target is supplied."""
+    entries = list(hass.config_entries.async_entries(DOMAIN))
+    if len(entries) == 1:
+        return entries[0].data.get(CONF_DEVICE_ID)
+    return None
+
+
 async def async_handle_move(call: ServiceCall) -> None:
     """Start or stop a continuous PTZ movement."""
     entity_ids = call.data.get(ATTR_ENTITY_ID, [])
-    if not entity_ids:
-        raise ValueError("tuya_ptz.move requires a target camera entity")
+    if entity_ids:
+        tuya_device_id = _tuya_device_id_from_entity(call.hass, entity_ids[0])
+    else:
+        tuya_device_id = _default_device_id(call.hass)
 
-    tuya_device_id = _tuya_device_id_from_entity(call.hass, entity_ids[0])
     if not tuya_device_id:
-        raise ValueError("Target entity is not a Tuya device")
+        raise ValueError(
+            "tuya_ptz.move needs a target camera when multiple PTZ cameras are configured"
+        )
 
     direction = call.data["direction"]
     phase = call.data["phase"]
