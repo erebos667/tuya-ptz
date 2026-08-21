@@ -1,5 +1,7 @@
 """PTZ direction buttons for Tuya cameras."""
 
+import asyncio
+
 from homeassistant.components.button import ButtonEntity
 from homeassistant.helpers.device_registry import DeviceInfo
 
@@ -15,6 +17,11 @@ DIRECTIONS = {
     "Left": ("6", "mdi:arrow-left"),
     "Up Left": ("7", "mdi:arrow-top-left"),
 }
+
+# The Tuya PTZ datapoint does not expose a speed value. The camera moves at
+# its own maximum speed until ptz_stop is sent, so use a short pulse to make
+# a button press behave like a small jog instead of a long continuous move.
+PTZ_PULSE_SECONDS = 0.30
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -79,7 +86,7 @@ class TuyaPTZButton(ButtonEntity):
         )
 
     async def async_press(self) -> None:
-        """Send the selected PTZ command through the existing Tuya manager."""
+        """Send a short PTZ pulse, then stop the camera."""
         manager = None
         device = None
 
@@ -91,17 +98,25 @@ class TuyaPTZButton(ButtonEntity):
                 break
 
         if manager is None or device is None:
-            raise RuntimeError(
-                f"Tuya device {self._device_id} is not available"
-            )
+            raise RuntimeError(f"Tuya device {self._device_id} is not available")
 
         if self._direction is None:
             commands = [{"code": "ptz_stop", "value": True}]
-        else:
-            commands = [{"code": "ptz_control", "value": self._direction}]
+            await self.hass.async_add_executor_job(
+                manager.send_commands, device.id, commands
+            )
+            return
 
         await self.hass.async_add_executor_job(
             manager.send_commands,
             device.id,
-            commands,
+            [{"code": "ptz_control", "value": self._direction}],
+        )
+
+        await asyncio.sleep(PTZ_PULSE_SECONDS)
+
+        await self.hass.async_add_executor_job(
+            manager.send_commands,
+            device.id,
+            [{"code": "ptz_stop", "value": True}],
         )
